@@ -1,65 +1,90 @@
-const express = require('express');
-const bodyParser = require('body-parser');
+const express = require("express");
+const bodyParser = require("body-parser");
+const superagent = require("superagent");
+
 const app = express();
 const port = process.env.PORT || 3000;
 
-let tasks = [
-    { id: 1, title: 'Faire les courses', completed: false },
-    { id: 2, title: 'Promener le chien', completed: true },
-    { id: 3, title: 'Appeler maman', completed: false },
-  ];
-  
-var jsonParser = bodyParser.json()
+const red = Math.floor(Math.random() * 244) + 1;
+const green = Math.floor(Math.random() * 244) + 1;
+const blue = Math.floor(Math.random() * 244) + 1;
 
-app.set('view engine', 'ejs');
+const background = "#" + red.toString(16) + green.toString(16) + blue.toString(16);
+const text = "#" + (255 - red).toString(16) + (255 - green).toString(16) + (255 - blue).toString(16);
+
+console.log(`Background color: ${background} -- Text color: ${text}`);
+
+var jsonParser = bodyParser.json();
+
+// Preparing the timeout objects
+const timeoutSet = 2000;
+const controller = new AbortController();
+const timeoutId = setTimeout(() => controller.abort(), timeoutSet);
+
+function callApi(url) {
+  return new Promise((resolve, reject) => {
+    const request = superagent.get(url);
+
+    const timeout = setTimeout(() => {
+      request.abort();
+      reject("Timeout");
+    }, 1000); // temps d'attente maximal en millisecondes avant de rejeter la promesse
+
+    request
+      .then((response) => {
+        clearTimeout(timeout);
+        resolve(response.body);
+      })
+      .catch((error) => {
+        clearTimeout(timeout);
+        reject("Timeout");
+      });
+  });
+}
+
+function consumeCPU(delay) {
+  const endTime = Date.now() + delay * 1000;
+  while (Date.now() < endTime) {
+    Math.random();
+  }
+}
+
+app.set("view engine", "ejs");
 app.use(bodyParser.urlencoded({ extended: false }));
-app.use(express.static(__dirname + '/public'));
+app.use(express.static(__dirname + "/public"));
 
-// Afficher la liste des tâches
-app.get('/', (req, res) => {
-    res.render('index', { tasks });
-  });
-  
-  // Ajouter une nouvelle tâche (endpoint API)
-  app.post('/api/tasks',jsonParser, (req, res) => {
-    console.log("POST /tasks")
-    console.log(`Received body: ${JSON.stringify(req.body)}`)
-    const task = {
-      id: tasks.length + 1,
-      title: req.body.title,
-      completed: false,
-    };
-    tasks.push(task);
-    res.json(task);
-  });
-  
-  // Marquer une tâche comme terminée (endpoint API)
-  app.put('/api/tasks/:id', (req, res) => {
-    console.log("PUT /tasks")
-    const id = parseInt(req.params.id);
-    const task = tasks.find((t) => t.id === id);
-  
-    if (task) {
-      task.completed = !task.completed;
-      res.json(task);
-    } else {
-      res.status(404).send('Tâche non trouvée');
-    }
-  });
-  
-  // Supprimer une tâche (endpoint API)
-  app.delete('/api/tasks/:id', (req, res) => {
-    const id = parseInt(req.params.id);
-    const index = tasks.findIndex((t) => t.id === id);
-  
-    if (index !== -1) {
-      tasks.splice(index, 1);
-      res.status(204).send();
-    } else {
-      res.status(404).send('Tâche non trouvée');
-    }
-  });
-  
+// Home page
+app.get("/", (req, res) => {
+  console.log("Homepage requested");
+  let machine_id = "Not found";
+
+  callApi("http://169.254.169.254/meta-data/instance-id")
+    .then((result) => {
+      console.log(machine_id);
+      res.render("index", {
+        machine_id: JSON.stringify(result),
+        text_color: text,
+        background_color: background,
+      });
+    })
+    .catch((error) => {
+      console.log(error);
+      res.render("index", {
+        machine_id: "ID not found",
+        text_color: text,
+        background_color: background,
+      });
+    });
+});
+
+// Small basic endpoint to wait for n seconds...
+app.get("/api/waiting", (req, res) => {
+  const delay = req.query.delay || 5;
+  console.log(`Waiting ${delay} seconds before responding.`);
+  consumeCPU(delay);
+  res.json({ waited: parseInt(delay) });
+});
+
 app.listen(port, () => {
-  console.log(`Serveur démarré sur le port ${port}`);
+  console.log(`Server started on port ${port}`);
 });

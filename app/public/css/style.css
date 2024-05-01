@@ -23,8 +23,10 @@ html {
 
 #titleBar {
   height: 50px;
+  /*
   background-color: #3399FF;
   color: white;
+  */
   border-radius: 15px 15px 0px 0px;
   display: flex;
   align-items: center;
